@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Lab: RSA & Diffie-Hellman</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .section { margin-bottom: 40px; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; }
+        h2 { color: #2980b9; margin-top: 0; }
+        .input-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        label { display: block; font-weight: bold; font-size: 0.9em; margin-bottom: 5px; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #3498db; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; width: 100%; font-size: 1em; font-weight: bold; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        .output-box { margin-top: 20px; padding: 15px; background: #f9f9f9; border-left: 5px solid #3498db; display: none; }
+        .step { margin-bottom: 10px; font-size: 0.95em; line-height: 1.5; }
+        .math { font-family: 'Courier New', Courier, monospace; background: #eee; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
+        .result { color: #27ae60; font-weight: bold; font-size: 1.1em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Cryptographic Algorithms</h1>
+
+    <!-- RSA SECTION -->
+    <div class="section">
+        <h2>1. RSA Algorithm (RES Implementation)</h2>
+        <div class="input-group">
+            <div>
+                <label>Prime p:</label>
+                <input type="number" id="rsa-p" value="61" placeholder="e.g. 61">
+            </div>
+            <div>
+                <label>Prime q:</label>
+                <input type="number" id="rsa-q" value="53" placeholder="e.g. 53">
+            </div>
+            <div>
+                <label>Public Exp e:</label>
+                <input type="number" id="rsa-e" value="17" placeholder="e.g. 17">
+            </div>
+            <div>
+                <label>Message M (Number):</label>
+                <input type="number" id="rsa-m" value="42" placeholder="e.g. 42">
+            </div>
+        </div>
+        <button onclick="calculateRSA()">Run RSA Step-by-Step</button>
+        <div id="rsa-output" class="output-box"></div>
+    </div>
+
+    <!-- DIFFIE-HELLMAN SECTION -->
+    <div class="section">
+        <h2>2. Diffie-Hellman Key Exchange</h2>
+        <div class="input-group">
+            <div>
+                <label>Public Prime P:</label>
+                <input type="number" id="dh-p" value="23">
+            </div>
+            <div>
+                <label>Public Base G:</label>
+                <input type="number" id="dh-g" value="5">
+            </div>
+            <div>
+                <label>Alice Private a:</label>
+                <input type="number" id="dh-a" value="6">
+            </div>
+            <div>
+                <label>Bob Private b:</label>
+                <input type="number" id="dh-b" value="15">
+            </div>
+        </div>
+        <button onclick="calculateDH()">Run Diffie-Hellman Step-by-Step</button>
+        <div id="dh-output" class="output-box"></div>
+    </div>
+</div>
+
+<script>
+    // Helper for Modular Exponentiation: (base^exp) % mod
+    function power(base, exp, mod) {
+        let res = BigInt(1);
+        base = BigInt(base) % BigInt(mod);
+        exp = BigInt(exp);
+        while (exp > 0n) {
+            if (exp % 2n === 1n) res = (res * base) % BigInt(mod);
+            base = (base * base) % BigInt(mod);
+            exp = exp / 2n;
+        }
+        return res;
+    }
+
+    // Modular Multiplicative Inverse: find d such that (e * d) % phi = 1
+    function modInverse(e, phi) {
+        let m0 = phi, t, q;
+        let x0 = 0n, x1 = 1n;
+        if (phi === 1n) return 0n;
+        while (e > 1n) {
+            q = e / phi;
+            t = phi;
+            phi = e % phi;
+            e = t;
+            t = x0;
+            x0 = x1 - q * x0;
+            x1 = t;
+        }
+        if (x1 < 0n) x1 += m0;
+        return x1;
+    }
+
+    function calculateRSA() {
+        const p = BigInt(document.getElementById('rsa-p').value);
+        const q = BigInt(document.getElementById('rsa-q').value);
+        const e = BigInt(document.getElementById('rsa-e').value);
+        const M = BigInt(document.getElementById('rsa-m').value);
+        const out = document.getElementById('rsa-output');
+        out.style.display = 'block';
+        out.innerHTML = "";
+
+        // Steps
+        const n = p * q;
+        const phi = (p - 1n) * (q - 1n);
+        const d = modInverse(e, phi);
+        const C = power(M, e, n);
+        const decryptedM = power(C, d, n);
+
+        out.innerHTML += `<div class="step">1. Calculate n: <span class="math">n = p * q = ${p} * ${q} = ${n}</span></div>`;
+        out.innerHTML += `<div class="step">2. Calculate Phi(n): <span class="math">&phi;(n) = (p-1)(q-1) = ${phi}</span></div>`;
+        out.innerHTML += `<div class="step">3. Find Private Key d: <span class="math">d = e⁻¹ mod &phi;(n) = ${d}</span></div>`;
+        out.innerHTML += `<div class="step">4. Encryption: <span class="math">C = M^e mod n = ${M}^${e} mod ${n} = ${C}</span></div>`;
+        out.innerHTML += `<div class="step">5. Decryption: <span class="math">M = C^d mod n = ${C}^${d} mod ${n} = ${decryptedM}</span></div>`;
+        out.innerHTML += `<div class="result">Final Shared Result: Message is ${decryptedM}</div>`;
+    }
+
+    function calculateDH() {
+        const P = BigInt(document.getElementById('dh-p').value);
+        const G = BigInt(document.getElementById('dh-g').value);
+        const a = BigInt(document.getElementById('dh-a').value);
+        const b = BigInt(document.getElementById('dh-b').value);
+        const out = document.getElementById('dh-output');
+        out.style.display = 'block';
+        out.innerHTML = "";
+
+        // Calculations
+        const A = power(G, a, P);
+        const B = power(G, b, P);
+        const secretAlice = power(B, a, P);
+        const secretBob = power(A, b, P);
+
+        out.innerHTML += `<div class="step">1. Alice computes Public Value A: <span class="math">A = G^a mod P = ${G}^${a} mod ${P} = ${A}</span></div>`;
+        out.innerHTML += `<div class="step">2. Bob computes Public Value B: <span class="math">B = G^b mod P = ${G}^${b} mod ${P} = ${B}</span></div>`;
+        out.innerHTML += `<div class="step">3. Alice computes Shared Secret: <span class="math">S = B^a mod P = ${B}^${a} mod ${P} = ${secretAlice}</span></div>`;
+        out.innerHTML += `<div class="step">4. Bob computes Shared Secret: <span class="math">S = A^b mod P = ${A}^${b} mod ${P} = ${secretBob}</span></div>`;
+        out.innerHTML += `<div class="result">Shared Secret: ${secretAlice}</div>`;
+    }
+</script>
+
+</body>
+</html>
