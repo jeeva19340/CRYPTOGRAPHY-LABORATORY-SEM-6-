@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cryptographic Trace Analysis</title>
+<style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f9; padding: 20px; color: #333; }
+    .container { max-width: 1000px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+    
+    .section { margin-bottom: 40px; padding: 20px; border: 1px solid #e1e8ed; border-radius: 8px; background: #fafbfc; }
+    h2 { color: #2980b9; margin-top: 0; font-size: 1.4em; border-left: 5px solid #3498db; padding-left: 10px; }
+    
+    .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; color: #7f8c8d; }
+    input { width: 100%; padding: 10px; border: 1px solid #ccd6dd; border-radius: 5px; box-sizing: border-box; font-family: 'Courier New', monospace; }
+    
+    button { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 5px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+    button:hover { background: #2980b9; }
+    
+    .output-label { margin-top: 15px; display: block; font-weight: bold; color: #2c3e50; }
+    pre { background: #2c3e50; color: #ecf0f1; padding: 20px; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; max-height: 500px; overflow-y: auto; font-size: 0.9em; line-height: 1.6; }
+    
+    .highlight { color: #f1c40f; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Algorithm Trace Analyzer</h1>
+
+    <!-- S-DES SECTION -->
+    <div class="section">
+        <h2>1. S-DES (Simplified Data Encryption Standard)</h2>
+        <div class="input-grid">
+            <div>
+                <label>Plaintext (Input 8 bits, e.g., 10101010)</label>
+                <input id="sdes-pt" placeholder="8 bits" value="10101010">
+            </div>
+            <div>
+                <label>Master Key (Input 10 bits, e.g., 1010000010)</label>
+                <input id="sdes-key" placeholder="10 bits" value="1010000010">
+            </div>
+        </div>
+        <label>Permutation Tables (Enter indices separated by spaces)</label>
+        <div class="input-grid" style="grid-template-columns: repeat(5, 1fr);">
+            <div><label>P10</label><input id="p10" value="3 5 2 7 4 10 1 9 8 6"></div>
+            <div><label>P8</label><input id="p8" value="6 3 7 4 8 5 10 9"></div>
+            <div><label>IP</label><input id="ip" value="2 6 3 1 4 8 5 7"></div>
+            <div><label>IP-Inv</label><input id="ipinv" value="4 1 3 5 7 2 8 6"></div>
+            <div><label>EP</label><input id="ep" value="4 1 2 3 2 3 4 1"></div>
+        </div>
+        <button onclick="runSDES()">Run S-DES Encryption</button>
+        <span class="output-label">Execution Trace:</span>
+        <pre id="sdes-output">Logs will appear here...</pre>
+    </div>
+
+    <!-- AES SECTION -->
+    <div class="section">
+        <h2>2. AES-128 (Advanced Encryption Standard)</h2>
+        <div class="input-grid">
+            <div>
+                <label>Plaintext (16 Characters / 128-bit)</label>
+                <input id="aes-pt" placeholder="16 characters" value="SECURITY_ENCRYPT">
+            </div>
+            <div>
+                <label>Cipher Key (16 Characters / 128-bit)</label>
+                <input id="aes-key" placeholder="16 characters" value="MY_SECRET_KEY_12">
+            </div>
+        </div>
+        <button onclick="runAES()">Run AES-128 Encryption</button>
+        <span class="output-label">Execution Trace:</span>
+        <pre id="aes-output">Logs will appear here...</pre>
+    </div>
+</div>
+
+<script>
+const hex = b => b.toString(16).padStart(2, "0").toUpperCase();
+
+// --- S-DES CORE ---
+const S0 = [[1,0,3,2],[3,2,1,0],[0,2,1,3],[3,1,3,2]];
+const S1 = [[0,1,2,3],[2,0,1,3],[3,0,1,0],[2,1,0,3]];
+const P4 = [2,4,3,1];
+
+const s_permute = (str, table) => table.map(i => str[i-1]).join("");
+const s_xor = (a, b) => a.split("").map((x, i) => x === b[i] ? "0" : "1").join("");
+const s_ls = (str, n) => str.slice(n) + str.slice(0, n);
+
+function runSDES() {
+    const log = [];
+    const pt = document.getElementById("sdes-pt").value.replace(/[^01]/g, "").slice(0,8);
+    const key = document.getElementById("sdes-key").value.replace(/[^01]/g, "").slice(0,10);
+    
+    const getT = (id) => document.getElementById(id).value.trim().split(/\s+/).map(Number);
+    const P10=getT("p10"), P8=getT("p8"), IP=getT("ip"), IPi=getT("ipinv"), EP=getT("ep");
+
+    log.push(">>> STARTING S-DES ENCRYPTION");
+    log.push(`Input: PT=${pt}, Key=${key}\n`);
+
+    log.push("[PHASE 1: KEY GENERATION]");
+    let p10_res = s_permute(key, P10);
+    log.push(`1. Apply P10: ${p10_res}`);
+    let L0 = p10_res.slice(0,5), R0 = p10_res.slice(5);
+    
+    let L1 = s_ls(L0, 1), R1 = s_ls(R0, 1);
+    log.push(`2. Left Shift 1: L=${L1}, R=${R1}`);
+    let k1 = s_permute(L1 + R1, P8);
+    log.push(`** Subkey K1 generated: ${k1}`);
+
+    let L2 = s_ls(L1, 2), R2 = s_ls(R1, 2);
+    log.push(`3. Left Shift 2: L=${L2}, R=${R2}`);
+    let k2 = s_permute(L2 + R2, P8);
+    log.push(`** Subkey K2 generated: ${k2}\n`);
+
+    log.push("[PHASE 2: ENCRYPTION STEPS]");
+    let state = s_permute(pt, IP);
+    log.push(`1. Initial Permutation (IP): ${state}`);
+
+    function fK(bits, k, round) {
+        log.push(`\n--- Round ${round} ---`);
+        let l = bits.slice(0,4), r = bits.slice(4);
+        let ep = s_permute(r, EP);
+        log.push(`   Expansion EP(R): ${ep}`);
+        let x = s_xor(ep, k);
+        log.push(`   XOR with Subkey: ${x}`);
+        
+        let b1 = x.slice(0,4), b2 = x.slice(4);
+        let r0 = parseInt(b1[0]+b1[3], 2), c0 = parseInt(b1[1]+b1[2], 2);
+        let r1 = parseInt(b2[0]+b2[3], 2), c1 = parseInt(b2[1]+b2[2], 2);
+        let s0v = S0[r0][c0].toString(2).padStart(2, "0");
+        let s1v = S1[r1][c1].toString(2).padStart(2, "0");
+        log.push(`   S-Box Results: S0=${s0v}, S1=${s1v}`);
+        
+        let p4v = s_permute(s0v + s1v, P4);
+        let resL = s_xor(l, p4v);
+        log.push(`   P4 & XOR: New Left is ${resL}`);
+        return resL + r;
+    }
+
+    let round1 = fK(state, k1, 1);
+    let sw = round1.slice(4) + round1.slice(0,4);
+    log.push(`\n2. Swap Operation (SW): ${sw}`);
+    
+    let round2 = fK(sw, k2, 2);
+    let final = s_permute(round2, IPi);
+    log.push(`\n3. Inverse Initial Permutation (IP-1): ${final}`);
+    log.push(`\n>>> RESULTING CIPHERTEXT: ${final}`);
+
+    document.getElementById("sdes-output").textContent = log.join("\n");
+}
+
+// --- AES CORE ---
+const SBOX = [0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16];
+const RCON = [0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,0x36];
+
+function getMat(s) {
+    let out = "";
+    for(let r=0; r<4; r++) {
+        out += "    ";
+        for(let c=0; c<4; c++) out += hex(s[c*4+r]) + " ";
+        out += "\n";
+    }
+    return out;
+}
+
+function gmul(a, b) {
+    let p = 0;
+    for(let i=0; i<8; i++){
+        if(b & 1) p ^= a;
+        let hi = a & 0x80;
+        a = (a << 1) & 0xFF;
+        if(hi) a ^= 0x1B;
+        b >>= 1;
+    }
+    return p;
+}
+
+function runAES() {
+    const log = [];
+    const ptInput = document.getElementById("aes-pt").value.padEnd(16, " ").slice(0,16);
+    const keyInput = document.getElementById("aes-key").value.padEnd(16, " ").slice(0,16);
+    
+    let state = [...ptInput].map(c => c.charCodeAt(0));
+    let keyBytes = [...keyInput].map(c => c.charCodeAt(0));
+
+    log.push(">>> STARTING AES-128 ENCRYPTION");
+    log.push(`PT: "${ptInput}" | Key: "${keyInput}"\n`);
+
+    log.push("[PHASE 1: KEY EXPANSION]");
+    let w = [];
+    for(let i=0; i<4; i++) w[i] = keyBytes.slice(4*i, 4*i+4);
+    for(let i=4; i<44; i++){
+        let tmp = [...w[i-1]];
+        if(i%4 === 0){
+            tmp = [...tmp.slice(1), tmp[0]].map(b => SBOX[b]);
+            tmp[0] ^= RCON[i/4 - 1];
+        }
+        w[i] = w[i-4].map((v, idx) => v ^ tmp[idx]);
+    }
+    log.push("Successfully generated 44 words (Round Keys 0-10).\n");
+
+    log.push("[PHASE 2: ENCRYPTION ROUNDS]");
+    log.push("Initial State:\n" + getMat(state));
+    
+    let rk0 = [...w[0], ...w[1], ...w[2], ...w[3]];
+    state = state.map((v, i) => v ^ rk0[i]);
+    log.push("Round 0: AddRoundKey\n" + getMat(state));
+
+    for(let r=1; r<=10; r++){
+        log.push(`--- Round ${r} ---`);
+        state = state.map(b => SBOX[b]);
+        log.push("1. SubBytes:\n" + getMat(state));
+        
+        let ns = new Array(16);
+        for(let row=0; row<4; row++){
+            for(let col=0; col<4; col++) ns[col*4+row] = state[((col+row)%4)*4+row];
+        }
+        state = ns;
+        log.push("2. ShiftRows:\n" + getMat(state));
+
+        if(r < 10){
+            let mc = new Array(16);
+            for(let c=0; c<4; c++){
+                let s0=state[c*4], s1=state[c*4+1], s2=state[c*4+2], s3=state[c*4+3];
+                mc[c*4]   = gmul(2,s0)^gmul(3,s1)^s2^s3;
+                mc[c*4+1] = s0^gmul(2,s1)^gmul(3,s2)^s3;
+                mc[c*4+2] = s0^s1^gmul(2,s2)^gmul(3,s3);
+                mc[c*4+3] = gmul(3,s0)^s1^s2^gmul(2,s3);
+            }
+            state = mc;
+            log.push("3. MixColumns:\n" + getMat(state));
+        }
+
+        let rk = [...w[r*4], ...w[r*4+1], ...w[r*4+2], ...w[r*4+3]];
+        state = state.map((v, i) => v ^ rk[i]);
+        log.push(`${r<10?4:3}. AddRoundKey:\n` + getMat(state));
+    }
+
+    log.push(`\n>>> FINAL CIPHERTEXT (HEX): ${state.map(hex).join("")}`);
+    document.getElementById("aes-output").textContent = log.join("\n");
+}
+</script>
+</body>
+</html>
